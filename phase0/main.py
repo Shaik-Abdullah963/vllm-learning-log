@@ -4,8 +4,13 @@ from threading import Thread
 
 def main():
     tok = AutoTokenizer.from_pretrained("distilgpt2")
-    model = AutoModelForCausalLM.from_pretrained("distilgpt2")
-    inputs = tok(["An increasing sequence: one,"], return_tensors="pt")
+    model = AutoModelForCausalLM.from_pretrained("distilgpt2", dtype="auto", device_map="auto")
+    inputs = tok(["An increasing sequence: one,"], return_tensors="pt").to(model.device)
+    print(inputs)
+    print("Tokens per sequence: ", inputs["input_ids"].shape[1])
+    print("Batch size: ", inputs["input_ids"].shape[0])
+    print("Input length (Total tokenns including padding): ",inputs["input_ids"].numel())
+    print("Total real tokens: ", (inputs["attention_mask"]).sum().item())
     streamer = TextIteratorStreamer(tok, skip_prompt=True, skip_special_tokens=True)
     # Run the generation in a separate thread, so that we can fetch the generated text in a non-blocking way.
     generation_kwargs = dict(inputs, streamer=streamer, max_new_tokens=20)

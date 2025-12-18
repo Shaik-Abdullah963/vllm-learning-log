@@ -9,5 +9,37 @@ This metric captures:
 TTFT was measured using streaming generation with a separate
 generation thread and `TextIteratorStreamer`.
 
+---
+
+### Model Configuration
+
+- **Model**: `distilgpt2`
+- **Framework**: Hugging Face Transformers
+- **Device**: MPS (Apple Silicon)
+- **Max New Tokens**: 20
+
+
+---
+
+
+### Input Prompt
+
+```text
+An increasing sequence: one,
+```
+
+### Input Token Statistics
+
+- **Batch size**: 1
+- **Tokens per sequence**: 6
+- **Total input tokens (including padding)**: 6
+- **Total real input tokens (non-padding)**: 6
+
+> Note: In this benchmark, batch size is 1 and no padding is applied,
+> so all token counts are equal. These fields are listed separately
+> to support future benchmarking with batching and variable-length inputs.
+
+---
+
 ### Example Output
 ![TTFT Output](results/ttft.png)
