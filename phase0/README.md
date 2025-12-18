@@ -43,3 +43,22 @@ An increasing sequence: one,
 
 ### Example Output
 ![TTFT Output](results/ttft.png)
+
+
+### TTFT Results
+
+TTFT was measured across multiple runs to distinguish between **cold-start**
+and **warm-start** behavior.
+
+- **Cold-start TTFT**: **~1.08 s**  
+  The first run after process startup. This includes model initialization,
+  device placement on MPS, kernel compilation, and memory setup.
+
+- **Warm-start TTFT**: **~0.86–0.90 s**  
+  Subsequent runs after initialization, where kernels and memory are reused
+  and the model is already resident on the device.
+
+> **Note:** Cold-start latency is expected to be higher and is relevant for
+> scenarios such as server restarts and autoscaling. Warm-start TTFT reflects
+> steady-state performance and is the primary metric for ongoing inference
+> workloads.
