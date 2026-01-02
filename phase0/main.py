@@ -20,6 +20,7 @@ def main():
     first_token_time = None
     generated_text = ""
     for new_text in streamer:
+        print(new_text, end="", flush=True)
         now = time.perf_counter()
         if first_token_time is None:
             first_token_time = time.perf_counter()
@@ -29,6 +30,10 @@ def main():
         generated_text += new_text
     # Total Latency or End to End Latency(E2EL)
     print(f"\n E2EL: {last_token_time - t0:.4f}s\n")
+    # Token Generation Time (TGT)
+    # Token Generation Time measures only the decode phase, i.e. all tokens after the first one.
+    token_generation_time = last_token_time - first_token_time
+    print(f"Token Generation Time: {token_generation_time:.4f}s")
     print(generated_text)
     thread.join()
 
