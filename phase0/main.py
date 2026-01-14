@@ -12,7 +12,7 @@ def main():
 
     prompt = "An increasing sequence: one,"
     inputs = tok([prompt], return_tensors="pt").to(model.device)
-
+    print(inputs)
     print("Prompt tokens:", inputs["input_ids"].shape[1])
     print("Batch size:", inputs["input_ids"].shape[0])
     print("Total real tokens:", inputs["attention_mask"].sum().item())
