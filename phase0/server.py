@@ -86,7 +86,7 @@ def generate_full_text(prompt: str, max_new_tokens: int, temperature: float, top
         # Decode step
         out = model(input_ids = last_token, past_key_values = past, use_cache=True)
 
-        #Save the updated KV cache, andthis cache now includes the newly generated token, and will be used in next iteration
+        #Save the updated KV cache, and this cache now includes the newly generated token, and will be used in next iteration
         #O(1) operation
         past = out.past_key_values
 
