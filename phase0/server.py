@@ -14,7 +14,7 @@ model = AutoModelForCausalLM.from_pretrained(MODEL, dtype="auto", device_map="au
 model.eval()
 
 
-#Token Smapler - It takes the model's raw output scores for the nexxt token and decides which token ID to pick it.
+#Token Smapler - It takes the model's raw output scores for the next token and decides which token ID to pick it.
 def smaple_next_token(logits, temperature: float, top_p: float):
     """
     logits: [B,V]
@@ -27,14 +27,15 @@ def smaple_next_token(logits, temperature: float, top_p: float):
         return next_token_ids
     # Apply temperature
     scalled_logits = logits / temperature
-
+    
     # Apply Softmax to get probabilities
     probs = torch.softmax(scalled_logits, dim=-1)
+    
 
     # Apply Top-p (nucleus) sampling
     sorted_probs, sorted_indices = torch.sort(probs, descending=True, dim=-1)
     cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
-
+    
     # Mask out tokens with cumulative probability above top_p
     mask = cumulative_probs > top_p
 
@@ -42,6 +43,7 @@ def smaple_next_token(logits, temperature: float, top_p: float):
     # In that case, we keep at least one token
     mask[...,0] = False
     sorted_probs = sorted_probs.masked_fill(mask, 0.0)
+    
 
     #Renormalize the probabilities
     sorted_probs = sorted_probs / sorted_probs.sum(dim=-1, keepdim=True)
@@ -49,9 +51,88 @@ def smaple_next_token(logits, temperature: float, top_p: float):
     # sample in sorted space then map back
     next_in_sorted = torch.multinomial(sorted_probs, num_samples=1)
     next_token = sorted_indices.gather(-1, next_in_sorted)
+    
     return next_token
 
+@torch.inference_mode()
+def generate_full_text(prompt: str, max_new_tokens: int, temperature: float, top_p: float):
+    inputs = tok([prompt], return_tensors="pt").to(model.device)
+    
 
-@app.get("/health")
+    t0 = time.perf_counter()
+
+    # ----------- PREFILL-----------
+    out = model(**inputs, use_cache=True)
+    past = out.past_key_values
+
+    # first token selection time = TTFT boundary (prefill + first decode step compute)
+    #We measure time when we *finish* the first next token
+    next_token = smaple_next_token(out.logits[:, -1, :], temperature, top_p)
+    t_first = time.perf_counter()
+    
+    generated_ids = [next_token]
+    itl_times = [] # timestamps of each decode step completion after the first token
+    last_token = next_token
+
+    # ----------- DECODE (token-by-token) -----------
+    #Autoregressive decoding loop, generates one token at a time using KV-cache
+    for _ in range(max_new_tokens -1):
+        # Decode step
+        out = model(input_ids = last_token, past_key_values = past, use_cache=True)
+
+        #Save the updated KV cache, andthis cache now includes the newly generated token, and will be used in next iteration
+        #O(1) operation
+        past = out.past_key_values
+
+        # Sample next token
+        last_token = smaple_next_token(out.logits[:, -1, :], temperature, top_p)
+        generated_ids.append(last_token)
+
+        # Inter token latency time capture
+        itl_times.append(time.perf_counter())
+    t_end = time.perf_counter()
+
+    gen_ids = torch.cat(generated_ids, dim=1)  #[B, max_new_tokens]
+
+    #decode tokens to text
+    gen_text = tok.decode(gen_ids[0], skip_special_tokens=True)
+
+    #metrics
+    ttft = t_first - t0
+    e2el = t_end - t0
+
+    output_tokens = gen_ids.shape[1]
+
+    # ITLs: exact pauses between consecutive tokens in decode
+    # We have completion times for each token computation.
+    # token 1 completes at t_first, token 2 completes at itl_times[0], etc.
+
+    token_finish_times = [t_first] + itl_times  #len = max_new_tokens
+    itls = [
+        token_finish_times[i] - token_finish_times[i - 1]
+        for i in range(1, len(token_finish_times))
+    ]
+
+    # TPOT (single request) = (E2EL - TTFT)/(output_tokens-1)  (decode avg)
+    tpot = (e2el - ttft) / (output_tokens - 1) if output_tokens > 1 else 0.0
+
+    # mean ITL (single request) equals TPOT by definition when computed on same tokens
+    mean_itl = (sum(itls) / len(itls)) if itls else 0.0
+
+    return {
+        "text": prompt + gen_text,
+        "ttft_s": ttft,
+        "e2el_s": e2el,
+        "output_tokens": int(output_tokens),
+        "tpot_s": tpot,
+        "mean_itl_s": mean_itl,
+        "itls_s": itls,  
+    }
+
+
+    
 def health():
     return {"ok": True, "model": MODEL, "device": str(model.device)}
+inputs  = tok(["The cat on "], return_tensors="pt").to(model.device)
+out = model(**inputs, use_cache=True)
+print(out.past_key_values)
