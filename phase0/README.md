@@ -32,88 +32,93 @@ uvicorn phase0.server:app --reload
 ```CLI
    Sample Input:
    curl -X POST http://localhost:8000/generate \
-  -H "Content-Type: application/json" \
-  -d '{"prompt":"An increasing sequence: one,", "max_new_tokens":20}'
+    -H "Content-Type: application/json" \
+    -d '{"prompt":"An increasing sequence: one,", "max_new_tokens":20}'
 
   Output:
-  {"text":"An increasing sequence: one, two, three. In China, it’s associated with the slowing of migration and another by",
-  "ttft_s":0.08361095299187582,
-  "e2el_s":0.6445639790035784,"output_tokens":20,
-  "tpot_s":0.02952384347430014,
-  "mean_itl_s":0.029523782894677043
+  {
+    "text":"An increasing sequence: one, two, and three, called eyewear as the C6\n\n\n\nA marking on the",
+    "ttft_s":0.038806516997283325,
+    "e2el_s":0.5960898729972541,
+    "output_tokens":20,
+    "tpot_s":0.029330702947366883,
+    "mean_itl_s":0.029330629104821895
   }
 
   Input:
   curl -N -X POST http://localhost:8000/generate/stream \  
-  -H "Content-Type: application/json" \
-  -d '{"prompt":"An increasing sequence: one,", "max_new_tokens":20}'
+    -H "Content-Type: application/json" \
+    -d '{"prompt":"An increasing sequence: one,", "max_new_tokens":20}'
 
   Output:
   event: meta
-  data: {"ttft_s": 0.129779}
+data: {"ttft_s": 0.040714}
 
-  event: token
-  data:  two
+event: token
+data:  2
 
-  event: token
-  data: ,
+event: token
+data: ,
 
-  event: token
-  data:  and
+event: token
+data:  3
 
-  event: token
-  data:  four
+event: token
+data: .
 
-  event: token
-  data: ,
+event: token
+data: 
+data: 
 
-  event: token
-  data:  all
+event: token
+data: 
+data: 
 
-  event: token
-  data:  ruled
+event: token
+data: Now
 
-  event: token
-  data:  by
+event: token
+data:  we
 
-  event: token
-  data:  animals
+event: token
+data: 're
 
-  event: token
-  data: .
+event: token
+data:  adding
 
-  event: token
-  data:  Notably
+event: token
+data:  increased
 
-  event: token
-  data: ,
+event: token
+data:  voltage
 
-  event: token
-  data:  his
+event: token
+data:  to
 
-  event: token
-  data:  sem
+event: token
+data:  the
 
-  event: token
-  data: ip
+event: token
+data:  parameter
 
-  event: token
-  data: rot
+event: token
+data:  range
 
-  event: token
-  data: ective
+event: token
+data: :
 
-  event: token
-  data:  effect
+event: token
+data: 
+data: 
 
-  event: token
-  data:  of
+event: token
+data: 0
 
-  event: token
-  data:  both
+event: token
+data: .
 
-  event: summary
-  data: {"e2el_s": 0.730274, "output_tokens": 20, "tpot_s": 0.031605, "mean_itl_s": 0.031585}
+event: summary
+data: {"e2el_s": 0.639951, "output_tokens": 20, "tpot_s": 0.031539, "mean_itl_s": 0.031520}
 
 
 
