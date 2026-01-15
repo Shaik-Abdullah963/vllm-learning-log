@@ -13,6 +13,12 @@ tok = AutoTokenizer.from_pretrained(MODEL)
 model = AutoModelForCausalLM.from_pretrained(MODEL, dtype="auto", device_map="auto")
 model.eval()
 
+class Req(BaseModel):
+    prompt: str
+    max_new_tokens: int = 20
+    temperature: float = 1.0
+    top_p: float = 0.9
+
 
 #Token Smapler - It takes the model's raw output scores for the next token and decides which token ID to pick it.
 def smaple_next_token(logits, temperature: float, top_p: float):
@@ -130,9 +136,19 @@ def generate_full_text(prompt: str, max_new_tokens: int, temperature: float, top
     }
 
 
-    
+@app.get("/")
 def health():
     return {"ok": True, "model": MODEL, "device": str(model.device)}
-inputs  = tok(["The cat on "], return_tensors="pt").to(model.device)
-out = model(**inputs, use_cache=True)
-print(out.past_key_values)
+
+@app.post("/generate")
+def generate(req: Req):
+    """
+    Non-streaming: returns full text at the end.
+    TTFT here is “compute TTFT” (prefill+first token compute), not “network TTFT”.
+    """
+    res = generate_full_text(req.prompt, req.max_new_tokens, req.temperature, req.top_p)
+
+    # Often you won’t return itls_s in /generate; you log it.
+    res.pop("itls_s", None)
+    return res
+
