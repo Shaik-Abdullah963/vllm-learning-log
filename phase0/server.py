@@ -21,7 +21,7 @@ class Req(BaseModel):
 
 
 #Token Smapler - It takes the model's raw output scores for the next token and decides which token ID to pick it.
-def smaple_next_token(logits, temperature: float, top_p: float):
+def sample_next_token(logits, temperature: float, top_p: float):
     """
     logits: [B,V]
     returns: next_token_ids [B, 1]
@@ -73,7 +73,7 @@ def generate_full_text(prompt: str, max_new_tokens: int, temperature: float, top
 
     # first token selection time = TTFT boundary (prefill + first decode step compute)
     #We measure time when we *finish* the first next token
-    next_token = smaple_next_token(out.logits[:, -1, :], temperature, top_p)
+    next_token = sample_next_token(out.logits[:, -1, :], temperature, top_p)
     t_first = time.perf_counter()
     
     generated_ids = [next_token]
@@ -91,7 +91,7 @@ def generate_full_text(prompt: str, max_new_tokens: int, temperature: float, top
         past = out.past_key_values
 
         # Sample next token
-        last_token = smaple_next_token(out.logits[:, -1, :], temperature, top_p)
+        last_token = sample_next_token(out.logits[:, -1, :], temperature, top_p)
         generated_ids.append(last_token)
 
         # Inter token latency time capture
@@ -152,3 +152,78 @@ def generate(req: Req):
     res.pop("itls_s", None)
     return res
 
+@app.post("/generate/stream")
+@torch.inference_mode()
+async def generate_stream(req: Req):
+    """
+    Streaming SSE: emits one token at a time + meta + summary.
+    This gives “user-perceived TTFT” because client receives first token immediately.
+
+    """
+    prompt = req.prompt
+    inputs = tok([prompt], return_tensors="pt").to(model.device)
+    input_ids = inputs["input_ids"]
+    
+    # Asynce generator that streams SSE events
+    async def event_gen():
+        t0 = time.perf_counter()
+        
+        # ----------- PREFILL-----------#
+        out = model(input_ids=input_ids, use_cache=True)
+        past = out.past_key_values
+
+        # First Token generation and TTFT
+        next_token = sample_next_token(out.logits[:, -1, :], req.temperature, req.top_p)
+        t_first = time.perf_counter()
+        ttft = t_first - t0
+
+        #Convert first token to text and emit "meta" + first token
+        first_text = tok.decode(next_token[0], skip_special_tokens=True)
+        yield {"event": "meta", "data": f'{{"ttft_s": {ttft:.6f}}}'}
+        yield {"event": "token", "data": first_text}
+        output_tokens = 1
+        token_finish_times = [t_first]  # finish time for token 1
+        last_token = next_token
+
+        # ----------- DECODE (token-by-token) -----------
+        for _ in range(req.max_new_tokens - 1):
+            #Decode step
+            out = model(input_ids=last_token, past_key_values=past, use_cache=True)
+            past = out.past_key_values
+            last_token = sample_next_token(out.logits[:, -1, :], req.temperature, req.top_p)
+
+            #inter token latency time capture
+            t_now = time.perf_counter()
+            token_finish_times.append(t_now)
+            token_text = tok.decode(last_token[0], skip_special_tokens=True)
+            output_tokens += 1
+            yield {"event": "token", "data": token_text}
+
+        #E2EL time capture
+        t_end = time.perf_counter()
+        e2el = t_end - t0
+
+        itls = [
+                token_finish_times[i] - token_finish_times[i - 1]
+                for i in range(1, len(token_finish_times))
+            ]
+        mean_itl = (sum(itls) / len(itls)) if itls else 0.0
+        tpot = (e2el - ttft) / (output_tokens - 1) if output_tokens > 1 else 0.0
+
+        yield {
+                "event": "summary",
+                "data": (
+                    f'{{"e2el_s": {e2el:.6f}, "output_tokens": {output_tokens}, '
+                    f'"tpot_s": {tpot:.6f}, "mean_itl_s": {mean_itl:.6f}}}'
+                ),
+            }
+
+    return EventSourceResponse(event_gen())
+
+
+
+
+
+
+
+            
